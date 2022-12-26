@@ -6,7 +6,7 @@ import * as THREE from 'three'
 import { useFrame, useThree } from '@react-three/fiber'
 import { HorizontalBlurShader, VerticalBlurShader } from 'three-stdlib'
 
-type Props = Omit<JSX.IntrinsicElements['group'], 'scale'> & {
+export type ContactShadowsProps = {
   opacity?: number
   width?: number
   height?: number
@@ -17,27 +17,30 @@ type Props = Omit<JSX.IntrinsicElements['group'], 'scale'> & {
   frames?: number
   scale?: number | [x: number, y: number]
   color?: THREE.ColorRepresentation
+  depthWrite?: boolean
 }
 
 export const ContactShadows = React.forwardRef(
   (
     {
-      scale,
+      scale = 10,
       frames = Infinity,
       opacity = 1,
       width = 1,
       height = 1,
       blur = 1,
       far = 10,
-      resolution = 256,
+      resolution = 512,
       smooth = true,
       color = '#000000',
+      depthWrite = false,
+      renderOrder,
       ...props
-    }: Props,
+    }: Omit<JSX.IntrinsicElements['group'], 'scale'> & ContactShadowsProps,
     ref
   ) => {
-    const scene = useThree(({ scene }) => scene)
-    const gl = useThree(({ gl }) => gl)
+    const scene = useThree((state) => state.scene)
+    const gl = useThree((state) => state.gl)
     const shadowCamera = React.useRef<THREE.OrthographicCamera>(null!)
 
     width = width * (Array.isArray(scale) ? scale[0] : scale || 1)
@@ -55,16 +58,14 @@ export const ContactShadows = React.forwardRef(
       const renderTarget = new THREE.WebGLRenderTarget(resolution, resolution)
       const renderTargetBlur = new THREE.WebGLRenderTarget(resolution, resolution)
       renderTargetBlur.texture.generateMipmaps = renderTarget.texture.generateMipmaps = false
-      const planeGeometry = new THREE.PlaneBufferGeometry(width, height).rotateX(Math.PI / 2)
+      const planeGeometry = new THREE.PlaneGeometry(width, height).rotateX(Math.PI / 2)
       const blurPlane = new THREE.Mesh(planeGeometry)
       const depthMaterial = new THREE.MeshDepthMaterial()
       depthMaterial.depthTest = depthMaterial.depthWrite = false
       depthMaterial.onBeforeCompile = (shader) => {
         shader.uniforms = {
           ...shader.uniforms,
-          ucolor: {
-            value: new THREE.Color(color).convertSRGBToLinear(),
-          },
+          ucolor: { value: new THREE.Color(color) },
         }
         shader.fragmentShader = shader.fragmentShader.replace(
           `void main() {`, //
@@ -74,7 +75,8 @@ export const ContactShadows = React.forwardRef(
         )
         shader.fragmentShader = shader.fragmentShader.replace(
           'vec4( vec3( 1.0 - fragCoordZ ), opacity );',
-          'vec4( ucolor, ( 1.0 - fragCoordZ ) * 1.0 );'
+          // Colorize the shadow, multiply by the falloff so that the center can remain darker
+          'vec4( ucolor * fragCoordZ * 2.0, ( 1.0 - fragCoordZ ) * 1.0 );'
         )
       }
 
@@ -90,9 +92,9 @@ export const ContactShadows = React.forwardRef(
         verticalBlurMaterial,
         renderTargetBlur,
       ]
-    }, [resolution, width, height, scale])
+    }, [resolution, width, height, scale, color])
 
-    const blurShadows = React.useCallback((blur) => {
+    const blurShadows = (blur) => {
       blurPlane.visible = true
 
       blurPlane.material = horizontalBlurMaterial
@@ -110,7 +112,7 @@ export const ContactShadows = React.forwardRef(
       gl.render(blurPlane, shadowCamera.current)
 
       blurPlane.visible = false
-    }, [])
+    }
 
     let count = 0
     useFrame(() => {
@@ -134,8 +136,14 @@ export const ContactShadows = React.forwardRef(
 
     return (
       <group rotation-x={Math.PI / 2} {...props} ref={ref as any}>
-        <mesh geometry={planeGeometry} scale={[1, -1, 1]} rotation={[-Math.PI / 2, 0, 0]}>
-          <meshBasicMaterial map={renderTarget.texture} transparent opacity={opacity} />
+        <mesh renderOrder={renderOrder} geometry={planeGeometry} scale={[1, -1, 1]} rotation={[-Math.PI / 2, 0, 0]}>
+          <meshBasicMaterial
+            map={renderTarget.texture}
+            map-encoding={gl.outputEncoding}
+            transparent
+            opacity={opacity}
+            depthWrite={depthWrite}
+          />
         </mesh>
         <orthographicCamera ref={shadowCamera} args={[-width / 2, width / 2, height / 2, -height / 2, 0, far]} />
       </group>
