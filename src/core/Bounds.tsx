@@ -14,6 +14,7 @@ export type BoundsApi = {
   refresh(object?: THREE.Object3D | THREE.Box3): any
   clip(): any
   fit(): any
+  to: ({ position, target }: { position: [number, number, number]; target?: [number, number, number] }) => any
 }
 
 export type BoundsProps = JSX.IntrinsicElements['group'] & {
@@ -36,14 +37,13 @@ type ControlsProto = {
 
 const isOrthographic = (def: THREE.Camera): def is THREE.OrthographicCamera =>
   def && (def as THREE.OrthographicCamera).isOrthographicCamera
-const isObject3D = (def: any): def is THREE.Object3D => def && (def as THREE.Object3D).isObject3D
 const isBox3 = (def: any): def is THREE.Box3 => def && (def as THREE.Box3).isBox3
 
 const context = React.createContext<BoundsApi>(null!)
 export function Bounds({ children, damping = 6, fit, clip, observe, margin = 1.2, eps = 0.01, onFit }: BoundsProps) {
   const ref = React.useRef<THREE.Group>(null!)
-  // @ts-expect-error new in @react-three/fiber@7.0.5
-  const { camera, invalidate, size, controls } = useThree()
+  const { camera, invalidate, size, controls: controlsImpl } = useThree()
+  const controls = controlsImpl as unknown as ControlsProto
 
   const onFitRef = React.useRef<((data: SizeProps) => void) | undefined>(onFit)
   onFitRef.current = onFit
@@ -95,7 +95,7 @@ export function Bounds({ children, damping = 6, fit, clip, observe, margin = 1.2
         }
 
         if (controls?.constructor.name === 'OrthographicTrackballControls') {
-          // Put camera on a sphere along which it should moves
+          // Put camera on a sphere along which it should move
           const { distance } = getSize()
           const direction = camera.position.clone().sub(controls.target).normalize().multiplyScalar(distance)
           const newPos = controls.target.clone().add(direction)
@@ -112,6 +112,25 @@ export function Bounds({ children, damping = 6, fit, clip, observe, margin = 1.2
         camera.updateProjectionMatrix()
         if (controls) controls.update()
         invalidate()
+        return this
+      },
+      to({ position, target }: { position: [number, number, number]; target?: [number, number, number] }) {
+        current.camera.copy(camera.position)
+        const { center } = getSize()
+        goal.camera.set(...position)
+
+        if (target) {
+          goal.focus.set(...target)
+        } else {
+          goal.focus.copy(center)
+        }
+
+        if (damping) {
+          current.animating = true
+        } else {
+          camera.position.set(...position)
+        }
+
         return this
       },
       fit() {
@@ -191,7 +210,7 @@ export function Bounds({ children, damping = 6, fit, clip, observe, margin = 1.2
       if (fit) api.fit()
       if (clip) api.clip()
     }
-  }, [size, clip, fit, observe])
+  }, [size, clip, fit, observe, camera, controls])
 
   useFrame((state, delta) => {
     if (current.animating) {

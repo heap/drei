@@ -22,7 +22,7 @@ import {
   MeshReflectorMaterial as MeshReflectorMaterialImpl,
 } from '../materials/MeshReflectorMaterial'
 
-export type Props = JSX.IntrinsicElements['meshStandardMaterial'] & {
+type Props = JSX.IntrinsicElements['meshStandardMaterial'] & {
   resolution?: number
   mixBlur?: number
   mixStrength?: number
@@ -178,7 +178,6 @@ export const MeshReflectorMaterial = React.forwardRef<MeshReflectorMaterialImpl,
         maxDepthThreshold,
         depthScale,
         depthToBlurRatioBias,
-        transparent: true,
         distortion,
         distortionMap,
         mixContrast,

@@ -15,6 +15,7 @@ import {
 } from 'three'
 import { OrthographicCamera } from './OrthographicCamera'
 import { useCamera } from './useCamera'
+import { OrbitControls as OrbitControlsType } from 'three-stdlib'
 
 type GizmoHelperContext = {
   tweenCamera: (direction: Vector3) => void
@@ -37,7 +38,16 @@ const targetPosition = new Vector3()
 type ControlsProto = { update(): void; target: THREE.Vector3 }
 
 export type GizmoHelperProps = JSX.IntrinsicElements['group'] & {
-  alignment?: 'top-left' | 'top-right' | 'bottom-right' | 'bottom-left'
+  alignment?:
+    | 'top-left'
+    | 'top-right'
+    | 'bottom-right'
+    | 'bottom-left'
+    | 'bottom-center'
+    | 'center-right'
+    | 'center-left'
+    | 'center-center'
+    | 'top-center'
   margin?: [number, number]
   renderPriority?: number
   autoClear?: boolean
@@ -45,6 +55,10 @@ export type GizmoHelperProps = JSX.IntrinsicElements['group'] & {
   // TODO: in a new major state.controls should be the only means of consuming controls, the
   // onTarget prop can then be removed!
   onTarget?: () => Vector3 // return the target to rotate around
+}
+
+const isOrbitControls = (controls: ControlsProto): controls is OrbitControlsType => {
+  return 'minPolarAngle' in (controls as OrbitControlsType)
 }
 
 export const GizmoHelper = ({
@@ -72,6 +86,11 @@ export const GizmoHelper = ({
   const animating = React.useRef(false)
   const radius = React.useRef(0)
   const focusPoint = React.useRef(new Vector3(0, 0, 0))
+  const defaultUp = React.useRef(new Vector3(0, 0, 0))
+
+  React.useEffect(() => {
+    defaultUp.current.copy(mainCamera.up)
+  }, [mainCamera])
 
   const tweenCamera = React.useCallback(
     (direction: Vector3) => {
@@ -112,6 +131,13 @@ export const GizmoHelper = ({
       if (animating.current) {
         if (q1.angleTo(q2) < 0.01) {
           animating.current = false
+
+          // Orbit controls uses UP vector as the orbit axes,
+          // so we need to reset it after the animation is done
+          // moving it around for the controls to work correctly
+          if (isOrbitControls(defaultControls)) {
+            mainCamera.up.copy(defaultUp.current)
+          }
         } else {
           const step = delta * turnRate
           // animate position by doing a slerp and then scaling the position on the unit sphere
@@ -142,8 +168,17 @@ export const GizmoHelper = ({
 
   // Position gizmo component within scene
   const [marginX, marginY] = margin
-  const x = alignment.endsWith('-left') ? -size.width / 2 + marginX : size.width / 2 - marginX
-  const y = alignment.startsWith('top-') ? size.height / 2 - marginY : -size.height / 2 + marginY
+
+  const x = alignment.endsWith('-center')
+    ? 0
+    : alignment.endsWith('-left')
+    ? -size.width / 2 + marginX
+    : size.width / 2 - marginX
+  const y = alignment.startsWith('center-')
+    ? 0
+    : alignment.startsWith('top-')
+    ? size.height / 2 - marginY
+    : -size.height / 2 + marginY
   return createPortal(
     <Context.Provider value={gizmoHelperContext}>
       <OrthographicCamera ref={virtualCam} position={[0, 0, 200]} />

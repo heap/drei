@@ -36,7 +36,7 @@ export const OrbitControls = React.forwardRef<OrbitControlsImpl, OrbitControlsPr
 
     useFrame(() => {
       if (controls.enabled) controls.update()
-    })
+    }, -1)
 
     React.useEffect(() => {
       controls.connect(explDomElement)
@@ -58,15 +58,12 @@ export const OrbitControls = React.forwardRef<OrbitControlsImpl, OrbitControlsPr
         if (onEnd) controls.removeEventListener('end', onEnd)
         controls.removeEventListener('change', callback)
       }
-    }, [onChange, onStart, onEnd])
+    }, [onChange, onStart, onEnd, controls, invalidate])
 
     React.useEffect(() => {
       if (makeDefault) {
-        // @ts-expect-error new in @react-three/fiber@7.0.5
         const old = get().controls
-        // @ts-expect-error new in @react-three/fiber@7.0.5
         set({ controls })
-        // @ts-expect-error new in @react-three/fiber@7.0.5
         return () => set({ controls: old })
       }
     }, [makeDefault, controls])

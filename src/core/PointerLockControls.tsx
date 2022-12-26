@@ -1,4 +1,5 @@
-import { EventManager, ReactThreeFiber, useThree } from '@react-three/fiber'
+import { EventManager, ReactThreeFiber, RootState, useThree } from '@react-three/fiber'
+import { DomEvent } from '@react-three/fiber/dist/declarations/src/core/events'
 import * as React from 'react'
 import * as THREE from 'three'
 import { PointerLockControls as PointerLockControlsImpl } from 'three-stdlib'
@@ -14,16 +15,19 @@ export type PointerLockControlsProps = ReactThreeFiber.Object3DNode<
   onChange?: (e?: THREE.Event) => void
   onLock?: (e?: THREE.Event) => void
   onUnlock?: (e?: THREE.Event) => void
+  makeDefault?: boolean
 }
 
 export const PointerLockControls = React.forwardRef<PointerLockControlsImpl, PointerLockControlsProps>(
-  ({ domElement, selector, onChange, onLock, onUnlock, enabled = true, ...props }, ref) => {
+  ({ domElement, selector, onChange, onLock, onUnlock, enabled = true, makeDefault, ...props }, ref) => {
     const { camera, ...rest } = props
-    const gl = useThree(({ gl }) => gl)
+    const setEvents = useThree((state) => state.setEvents)
+    const gl = useThree((state) => state.gl)
     const defaultCamera = useThree((state) => state.camera)
     const invalidate = useThree((state) => state.invalidate)
-    const raycaster = useThree((state) => state.raycaster)
     const events = useThree((state) => state.events) as EventManager<HTMLElement>
+    const get = useThree((state) => state.get)
+    const set = useThree((state) => state.set)
     const explCamera = camera || defaultCamera
     const explDomElement = (domElement || events.connected || gl.domElement) as HTMLElement
 
@@ -33,11 +37,18 @@ export const PointerLockControls = React.forwardRef<PointerLockControlsImpl, Poi
       if (enabled) {
         controls.connect(explDomElement)
         // Force events to be centered while PLC is active
-        const oldComputeOffsets = raycaster.computeOffsets
-        raycaster.computeOffsets = (e) => ({ offsetX: e.target.width / 2, offsetY: e.target.height / 2 })
+        const oldComputeOffsets = get().events.compute
+        setEvents({
+          compute(event: DomEvent, state: RootState) {
+            const offsetX = state.size.width / 2
+            const offsetY = state.size.height / 2
+            state.pointer.set((offsetX / state.size.width) * 2 - 1, -(offsetY / state.size.height) * 2 + 1)
+            state.raycaster.setFromCamera(state.pointer, state.camera)
+          },
+        })
         return () => {
           controls.disconnect()
-          raycaster.computeOffsets = oldComputeOffsets
+          setEvents({ compute: oldComputeOffsets })
         }
       }
     }, [enabled, controls])
@@ -64,7 +75,15 @@ export const PointerLockControls = React.forwardRef<PointerLockControlsImpl, Poi
         if (onUnlock) controls.addEventListener('unlock', onUnlock)
         elements.forEach((element) => (element ? element.removeEventListener('click', handler) : undefined))
       }
-    }, [onChange, onLock, onUnlock, selector])
+    }, [onChange, onLock, onUnlock, selector, controls, invalidate])
+
+    React.useEffect(() => {
+      if (makeDefault) {
+        const old = get().controls
+        set({ controls })
+        return () => set({ controls: old })
+      }
+    }, [makeDefault, controls])
 
     return <primitive ref={ref} object={controls} {...rest} />
   }

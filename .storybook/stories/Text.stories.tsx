@@ -133,7 +133,7 @@ function TextShadowScene() {
   )
 }
 
-function TextLtrScene() {
+function TextRtlScene() {
   const ref = useTurntable()
 
   return (
@@ -176,7 +176,6 @@ function CustomMaterialTextScene() {
         anchorY="middle"
       >
         <meshBasicMaterial
-          attach="material"
           side={DoubleSide}
           color={colorKnob('Color', defaultColor)}
           transparent
@@ -201,8 +200,8 @@ TextStrokeSt.storyName = 'Transparent with stroke'
 export const TextShadowSt = () => <TextShadowScene />
 TextShadowSt.storyName = 'Text Shadow'
 
-export const TextLtrSt = () => <TextLtrScene />
-TextLtrSt.storyName = 'Text Ltr'
+export const TextLtrSt = () => <TextRtlScene />
+TextLtrSt.storyName = 'Text Rtl'
 
 export const CustomMaterialTextSt = () => <CustomMaterialTextScene />
 CustomMaterialTextSt.storyName = 'Custom Material'
